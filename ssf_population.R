@@ -50,17 +50,29 @@ dat_all$sex <- c("m", "m", "f", "f", "f", "f", "m", "m", "f")
 T05t <- T05 %>% make_track(lon, lat, DateTime, crs = 4326) %>% transform_coords(crs_to = 2193)
 plot(T05t$x_, T05t$y_)
 summarize_sampling_rate(T05t)
-T05t <- T05t %>% track_resample(rate = hours(2), tolerance = minutes(10)) # %>% 
-  #filter_min_n_burst(min_n = 3) %>% steps_by_burst()
+
+T05_steps <- T05t %>% track_resample(rate = hours(2), tolerance = minutes(10)) %>% 
+  steps()
 
 dat_all <- dat_all %>% 
   mutate(trk = map(data, function(d) {
     make_track(d, lon, lat, DateTime, crs = 4326) %>% transform_coords(crs_to = 2193)
   }))
 
-dat1 <- dat_all %>% mutate(dat_clean = map(trk, ~ {
-  .x %>% track_resample(rate = hours(3), tolerance = minutes(10))
-}))
+dat_all_no05 <- dat_all %>% 
+  mutate(dat_clean = map(trk,
+                         ~ {.x %>% track_resample(rate = hours(3), tolerance = minutes(10))}), 
+         stps = map(dat_clean, ~ .x %>% steps()))
+
+steps_no05 <- dat_all_no05 %>%
+  dplyr::select(id, stps) %>% unnest(cols = c(id, stps))
+
+steps_all <- rbind(tibble(id = 45505, T05_steps), steps_no05)
+
+# for sampling from and using to update the movement parameters
+tentative_gamma_all <- fit_distr(steps_all$sl_, "gamma")
+tentative_gamma_shape <- tentative_gamma_all$params$shape
+tentative_gamma_scale <- tentative_gamma_all$params$scale
 
 # for boyce indices -------------------------------------------------------
 
@@ -144,10 +156,11 @@ plot(all_rasters)
 # creating random steps ---------------------------------------------------
 
 
-ssf05 <- T05t %>% steps_by_burst() %>% 
+ssf05 <- T05_steps %>% 
   random_steps(n = 30,
-               rand_ta = random_numbers(make_unif_distr(), n = 1e+05)) %>% 
-  extract_covariates(all_rasters) %>% 
+               rand_sl = random_numbers(tentative_gamma_all, n = 1e+05),
+               rand_ta = random_numbers(make_unif_distr(), n = 1e+05)) %>%
+  extract_covariates(all_rasters) %>%
   mutate(
     y = as.numeric(case_),
     cos_ta_ = cos(ta_),
@@ -156,16 +169,21 @@ ssf05 <- T05t %>% steps_by_burst() %>%
 T05_ssf <- tibble("id" = 45505, ssf05)
 
 
-dat_ssf <- dat1 %>% 
-  mutate(stps = map(dat_clean, ~ .x %>% steps_by_burst() %>% 
-                      random_steps(n = 30,
-                                   rand_ta = random_numbers(make_unif_distr(), n = 1e+05)) %>%
-                      extract_covariates(all_rasters))) %>% 
-  dplyr::select(id, stps) %>% unnest() %>% 
+dat_ssf_no05 <- dat_all_no05 %>%
+  mutate(steps_covs = map(stps, ~ .x %>%
+                            random_steps(n = 30,
+                                         rand_sl = random_numbers(tentative_gamma_all, n = 1e+05),
+                                         rand_ta = random_numbers(make_unif_distr(), n = 1e+05)) %>%
+                      extract_covariates(all_rasters))) %>%
+  dplyr::select(id, steps_covs) %>% unnest() %>%
   mutate(
     y = as.numeric(case_),
     cos_ta_ = cos(ta_),
     log_sl_ = log(sl_))
+
+
+
+
 
 
 all_ssf <- rbind(T05_ssf, dat_ssf)
