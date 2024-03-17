@@ -14,6 +14,9 @@ library(broom)
 library(ggpubr)
 library(patchwork)
 
+dat_ssf <- read_csv("outputs/dat_ssf_INLA_ready_2024-03-17.csv")
+dat_ssf$habsF <- factor(dat_ssf$habs, labels = c("Kanuka", "Native Forest", "Exotic Conifers", "Exotic Hardwoods", "Agriculture", "Suburban", "Other"))
+
 # import data files and remove any obvious errors. The majority of erroneous locations were removed with the Shimada et al 2012 speed filter
 
 T05 <- read_csv("data/CSV input data - dd_speed_6/T45505_dd_speed_6.csv") %>% filter(...1 != 1448)
@@ -151,7 +154,10 @@ points(dat_ssf$x2_, dat_ssf$y2_)
 points(dat_ssf$x1_, dat_ssf$y1_, col = "red")
 
 
-dat_ssf$habsF <- factor(dat_ssf$habs, labels = c("Kanuka", "Native Forest", "Exotic Conifers", "Exotic Hardwoods", "Agriculture", "Suburban", "Other"))
+# dat_ssf$habsF <- factor(dat_ssf$habs, labels = c("Kanuka", "Native Forest", "Exotic Conifers", "Exotic Hardwoods", "Agriculture", "Suburban", "Other"))
+
+
+dat_ssf$habsF <- factor(dat_ssf$DCChab, labels = c("Kanuka", "Native Forest", "Exotic Conifers", "Exotic Hardwoods", "Agriculture", "Suburban", "Other"))
 
 
 
@@ -308,7 +314,7 @@ ggplot(data = d4,
                      c("Suburban", "Native Forest", "Ex. Conifers", "Ex. Hardwoods", "Agriculture", "Other"))
   
   # ggsave("Individual_coefficients_15thJune21.png", width=200, height=120, units="mm", dpi = 300)
-ggsave(paste0("outputs/plots/Individual_coefficients_uniform_ta_", Sys.Date(), ".png"), width=180, height=120, units="mm", dpi = 300)
+ggsave(paste0("outputs/plots/Individual_coefficients_uniform_ta_", Sys.Date(), ".png"), width=160, height=100, units="mm", dpi = 800)
 
 
 # coefficients %>% filter(term == "habsFNative Forest") %>% ggplot(aes(x = age, y = estimate, colour = origin)) +
@@ -332,8 +338,11 @@ summary(native_forest_lm)
 nf_lm <- effect_plot(native_forest_lm, pred = Age, plot.points = T, interval = T) +
   labs(x = "Age", y = expression(paste("Estimate"))) +
   ggtitle("Native Forest") +
+  scale_x_continuous(breaks = seq(0, 10, 2)) +
   geom_hline(yintercept =  0, linetype = "dashed") +
   theme_classic()
+
+nf_lm
 
 # run linear model on coefficients of a single habitat category with age
 exotic_conifers_lm <- lm(estimate ~ Age, data = coefficients, subset = (term =="habsFExotic Conifers"))
@@ -341,8 +350,11 @@ summary(exotic_conifers_lm)
 ec_lm <- effect_plot(exotic_conifers_lm, pred = Age, plot.points = T, interval = T) +
   labs(x = "Age", y = expression(paste("Estimate"))) +
   ggtitle("Exotic Conifers") +
+  scale_x_continuous(breaks = seq(0, 10, 2)) +
   geom_hline(yintercept =  0, linetype = "dashed") +
   theme_classic()
+
+ec_lm
 
 # run linear model on coefficients of a single habitat category with age
 exotic_hardwoods_lm <- lm(estimate ~ Age, data = coefficients, subset = (term =="habsFExotic Hardwoods"))
@@ -352,6 +364,8 @@ eh_lm <- effect_plot(exotic_hardwoods_lm, pred = Age, plot.points = T, interval 
   ggtitle("Exotic Hardwoods") +
   geom_hline(yintercept =  0, linetype = "dashed") +
   theme_classic()
+
+eh_lm
 
 # run linear model on coefficients of a single habitat category with age
 agriculture <- lm(estimate ~ Age, data = coefficients, subset = (term =="habsFAgriculture"))
@@ -373,4 +387,4 @@ effect_plot(other, pred = Age, plot.points = T, interval = T) +
 
 
 nf_lm + ec_lm
-ggsave(paste0("outputs/plots/linear_models_forest_conifers", Sys.Date(), ".png"), width=180, height=100, units="mm", dpi = 300)
+ggsave(paste0("outputs/plots/linear_models_forest_conifers", Sys.Date(), ".png"), width=180, height=80, units="mm", dpi = 800)

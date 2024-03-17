@@ -26,6 +26,7 @@ library(glmmTMB)
 library(ecospat)
 library(tictoc)
 library(beepr)
+library(Rfast)
 
 options(timeout = 120)
 
@@ -152,6 +153,18 @@ all_rasters <- raster::stack(DCChab, shrubland, native_forest, exotic_conifers, 
 
 plot(all_rasters)
 
+# for all categories
+
+#podocarp and broadleaf as native forest - map used
+rcl <- cbind(c(15,16,18, 22, 2, 3, 24, 7, 5, 6, 20, 14, 1, 31, 
+               4, 8, 9, 10, 11, 13, 17, 19, 23, 25, 26, 27, 28, 29, 30, 12, 0, 21),
+             c(1, 1,1, 2, 2, 2, 2, 3, 4,4,4, 5, 6,6, 
+               7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,8,8))
+
+DCC <- reclassify(DCChab, rcl, right = NA)
+plot(-DCC)
+names(DCC) <- "habs"
+
 
 # creating random steps ---------------------------------------------------
 
@@ -161,6 +174,7 @@ ssf05 <- T05_steps %>%
                rand_sl = random_numbers(tentative_gamma_all, n = 1e+05),
                rand_ta = random_numbers(make_unif_distr(), n = 1e+05)) %>%
   extract_covariates(all_rasters) %>%
+  extract_covariates(DCC) %>%
   mutate(
     y = as.numeric(case_),
     cos_ta_ = cos(ta_),
@@ -174,29 +188,26 @@ dat_ssf_no05 <- dat_all_no05 %>%
                             random_steps(n = 30,
                                          rand_sl = random_numbers(tentative_gamma_all, n = 1e+05),
                                          rand_ta = random_numbers(make_unif_distr(), n = 1e+05)) %>%
-                      extract_covariates(all_rasters))) %>%
-  dplyr::select(id, steps_covs) %>% unnest() %>%
+                            extract_covariates(all_rasters) %>%
+                            extract_covariates(DCC))) %>%
+  dplyr::select(id, steps_covs) %>% unnest(c(id, steps_covs)) %>%
   mutate(
     y = as.numeric(case_),
     cos_ta_ = cos(ta_),
     log_sl_ = log(sl_))
 
 
-
-
-
-
-all_ssf <- rbind(T05_ssf, dat_ssf)
-dat_ssf <- all_ssf %>% mutate(id = as.numeric(factor(id)),
-                              step_id = paste(id, step_id_, sep = "-"))
+dat_ssf <- rbind(T05_ssf, dat_ssf_no05) %>% 
+  mutate(id_num = as.numeric(factor(id)),
+         step_id = paste(id, step_id_, sep = "-"))
 
 
 # remove random points that fell into water and remove NAs from DCChab
-
 dat_ssf <- dat_ssf %>% filter(water != 1 & !is.na(DCChab))
 dat_ssf_tbl <- as_tibble(dat_ssf)
 dat_ssf_tbl %>% dplyr::group_by(id, step_id_) %>% dplyr::summarise(n=n())
-dat_ssf <- dat_ssf_tbl %>% dplyr::group_by(id, step_id_) %>% dplyr::slice_head(n = 11) # only keep 10 random points per used point
+# only keep 10 random points per used point
+dat_ssf <- dat_ssf_tbl %>% dplyr::group_by(id, step_id_) %>% dplyr::slice_head(n = 11) 
 
 
 # plot(water)
@@ -209,6 +220,12 @@ points(dat_ssf$x1_, dat_ssf$y1_, col = "red")
 
 dat_ssf$idf <- as.factor(dat_ssf$id)
 
+dat_ssf %>% filter(y == 1) %>% ggplot(aes(x = sl_, fill = idf)) +
+  geom_density(alpha = 0.1, show.legend = F) +
+  scale_x_continuous(limits = c(0,3000), name = "Step Length (m)") +
+  scale_y_continuous(name = "Density") +
+  theme_classic()
+
 dat_ssf %>% filter(y == 0) %>% ggplot(aes(x = sl_, fill = idf)) +
   geom_density(alpha = 0.1, show.legend = F) +
   scale_x_continuous(limits = c(0,3000), name = "Step Length (m)") +
@@ -216,6 +233,12 @@ dat_ssf %>% filter(y == 0) %>% ggplot(aes(x = sl_, fill = idf)) +
   theme_classic()
 
 # ggsave("StepLengthDsitribution-available.png", width=150, height=90, units="mm", dpi = 300)
+
+dat_ssf %>% filter(y == 1) %>% ggplot(aes(x = ta_, fill = idf)) +
+  geom_density(alpha = 0.1, show.legend = F) +
+  scale_x_continuous(name = "Turning Angle (radians)") +
+  scale_y_continuous(name = "Density") +
+  theme_classic()
 
 dat_ssf %>% filter(y == 0) %>% ggplot(aes(x = ta_, fill = idf)) +
   geom_density(alpha = 0.1, show.legend = F) +
@@ -236,24 +259,26 @@ dat_ssf <- dat_ssf %>% filter(!is.na(cos_ta_))
 
 # required to run models
 
-dat_ssf$id1 <- dat_ssf$id
-dat_ssf$id2 <- dat_ssf$id
-dat_ssf$id3 <- dat_ssf$id
-dat_ssf$id4 <- dat_ssf$id
-dat_ssf$id5 <- dat_ssf$id
-dat_ssf$id6 <- dat_ssf$id
-dat_ssf$id7 <- dat_ssf$id
-dat_ssf$id8 <- dat_ssf$id
-dat_ssf$id9 <- dat_ssf$id
-dat_ssf$id10 <- dat_ssf$id
+dat_ssf$id1 <- dat_ssf$id_num
+dat_ssf$id2 <- dat_ssf$id_num
+dat_ssf$id3 <- dat_ssf$id_num
+dat_ssf$id4 <- dat_ssf$id_num
+dat_ssf$id5 <- dat_ssf$id_num
+dat_ssf$id6 <- dat_ssf$id_num
+dat_ssf$id7 <- dat_ssf$id_num
+dat_ssf$id8 <- dat_ssf$id_num
+dat_ssf$id9 <- dat_ssf$id_num
+dat_ssf$id10 <- dat_ssf$id_num
 
 
 # reading/writing csv files ready for INLA --------------------------------
 
 write_csv(dat_ssf, paste0("outputs/dat_ssf_INLA_ready_", Sys.Date(), ".csv"))
-dat_ssf <- read_csv("outputs/dat_ssf_INLA_ready_2024-01-11.csv")
+dat_ssf <- read_csv("outputs/dat_ssf_INLA_ready_2024-03-17.csv")
 
-dat_ssf$sl_scaled <- scale(dat_ssf$sl_) # for some reason this disables the ability to write_csv, so do this after exporting/importing
+dat_ssf$habsF <- factor(dat_ssf$habs, labels = c("Kanuka", "Native Forest", "Exotic Conifers", "Exotic Hardwoods", "Agriculture", "Suburban", "Other"))
+
+# dat_ssf$sl_scaled <- scale(dat_ssf$sl_) # for some reason this disables the ability to write_csv, so do this after exporting/importing
 
 used <- dat_ssf %>% filter(y == 1)
 available <- dat_ssf %>% filter(y == 0)
@@ -289,18 +314,18 @@ formula.random <- y ~ -1 +
     hyper = list(theta = list(initial = log(1), fixed = F, prior = "pc.prec", param = c(1,0.01)))) +
   # f(id7, shrubland, values = 1:10, model = "iid",
   #   hyper = list(theta = list(initial = log(1), fixed = F, prior = "pc.prec", param = c(1,0.01)))) +
-  f(id8, sl_, values = 1:10, model = "iid",
+  f(id7, sl_, values = 1:10, model = "iid",
     hyper = list(theta = list(initial = log(1), fixed = F, prior = "pc.prec", param = c(1,0.01)))) +
-  f(id9, log_sl_, values = 1:10, model = "iid",
+  f(id8, log_sl_, values = 1:10, model = "iid",
     hyper = list(theta = list(initial = log(1), fixed = F, prior = "pc.prec", param = c(1,0.01)))) +
-  f(id10, cos_ta_, values = 1:10, model = "iid",
+  f(id9, cos_ta_, values = 1:10, model = "iid",
     hyper = list(theta = list(initial = log(1), fixed = F, prior = "pc.prec", param = c(1,0.01))))
  
 mean.beta <- 0
 prec.beta <- 1e-4
 
 tic()
-m_all2 <- inla(formula.random, family = "Poisson", data = dat_ssf,
+m_all <- inla(formula.random, family = "Poisson", data = dat_ssf,
               control.fixed = list(
                 mean = mean.beta,
                 prec = list(default = prec.beta)
@@ -309,7 +334,7 @@ m_all2 <- inla(formula.random, family = "Poisson", data = dat_ssf,
 toc()
 beep(sound = 2)
 
-summary(m_all2)
+summary(m_all)
 m_all$summary.fixed
 m_all$summary.fixed$mean # beta estimates (mean of posterior)
 exp(m_all$summary.fixed$mean) # exponent of beta estimates (mean of posterior)
@@ -318,6 +343,17 @@ exp(m_all$summary.fixed$mode) # exponent of beta estimates (mode of posterior)
 max(exp(m_all$summary.fixed$mean))
 exp.beta <- exp(m_all$summary.fixed$mean)
 m_all$summary.hyperpar
+
+# individual estimates
+m_all$summary.random$id1
+m_all$summary.random$id2
+m_all$summary.random$id3
+m_all$summary.random$id4
+m_all$summary.random$id5
+m_all$summary.random$id6
+m_all$summary.random$id7
+m_all$summary.random$id8
+m_all$summary.random$id9
 
 plot(m_all$marginals.fixed$native_forest, type = "l")
 plot(m_all$marginals.fixed$exotic_conifers, type = "l")
@@ -342,7 +378,17 @@ covariate_modes <- data.frame("coef" = m_all$names.fixed, "posterior_mode" = cov
 # m_all <- inla_model_sl_logsl_costa
 
 saveRDS(m_all, file = paste0("outputs/INLA_model_move_params_", Sys.Date(), ".rds")) # to save a single object
-m_all <- readRDS("outputs/INLA_model_move_params_2024-01-11.rds")
+m_all <- readRDS("outputs/INLA_model_move_params_2024-03-17.rds")
+
+# update movement parameters
+updated_gamma_shape <- as.numeric(tentative_gamma_shape + log_sl_mode)
+updated_gamma_shape <- as.numeric(1/((1/tentative_gamma_scale) - sl_mode))
+updated_vm_kappa <- as.numeric(cos_ta_mode)
+
+random_numbers(make_vonmises_distr(kappa = updated_vm_kappa, vcov = NULL))
+
+ta_samples <- Rfast::rvonmises(n = 1e6, m = 0, k = -updated_vm_kappa) - pi
+hist(ta_samples, breaks = 100, freq = F, main = "Von Mises distribution", xlab = "Turning angles (radians)")
 
 # save(m_ndvi, m_ndvip1, m_expndvi, m_quad_ndvi, file = "INLA_models_with_ndvi.RData") # to save multiple objects simultaneously
 # load("INLA_models_with_ndvi.RData")
