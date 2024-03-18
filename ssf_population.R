@@ -380,15 +380,63 @@ covariate_modes <- data.frame("coef" = m_all$names.fixed, "posterior_mode" = cov
 saveRDS(m_all, file = paste0("outputs/INLA_model_move_params_", Sys.Date(), ".rds")) # to save a single object
 m_all <- readRDS("outputs/INLA_model_move_params_2024-03-17.rds")
 
+
+# Updating step length distribution ---------------------------------------
+
 # update movement parameters
 updated_gamma_shape <- as.numeric(tentative_gamma_shape + log_sl_mode)
-updated_gamma_shape <- as.numeric(1/((1/tentative_gamma_scale) - sl_mode))
-updated_vm_kappa <- as.numeric(cos_ta_mode)
+updated_gamma_scale <- as.numeric(1/((1/tentative_gamma_scale) - sl_mode))
 
+# sample from the tentative gamma distribution
+sl_samples_tentative <- rgamma(n = 1e5, shape = tentative_gamma_shape, scale = tentative_gamma_scale)
+hist(sl_samples_tentative, breaks = 100, main = "Tentative Gamma Distribution", xlab = "Step Length (m)")
+# sample from the updated gamma distribution
+sl_samples_updated <- rgamma(n = 1e5, shape = updated_gamma_shape, scale = updated_gamma_scale)
+hist(sl_samples_updated, breaks = 100, main = "Updated Gamma Distribution", xlab = "Step Length (m)")
+
+# create dataframe for ggplot
+sl_samples_df <- data.frame("sample" = 1:length(sl_samples_tentative),
+                            "sl_tentative" = sl_samples_tentative,
+                            "sl_updated" = sl_samples_updated)
+
+ggplot() +
+  geom_density(data = dat_ssf %>% filter(y == 1),
+               aes(x = sl_, fill = as.factor(id)),
+               alpha = 0.1, show.legend = F) +
+  geom_density(data = sl_samples_df,
+               aes(x = sl_tentative),
+               colour = "black", linetype = "dashed", alpha = 1, show.legend = T) +
+  geom_density(data = sl_samples_df,
+               aes(x = sl_updated),
+               colour = "red", alpha = 0.5, show.legend = T) +
+  scale_x_continuous(limits = c(0,3000), name = "Step Length (m)") +
+  scale_y_continuous(name = "Density") +
+  theme_classic()
+
+
+# Updating turn angles ----------------------------------------------------
+
+updated_vm_kappa <- as.numeric(cos_ta_mode)
 random_numbers(make_vonmises_distr(kappa = updated_vm_kappa, vcov = NULL))
 
-ta_samples <- Rfast::rvonmises(n = 1e6, m = 0, k = -updated_vm_kappa) - pi
+ta_samples_tentative <- Rfast::rvonmises(n = 1e5, m = 0, k = -updated_vm_kappa) - pi
 hist(ta_samples, breaks = 100, freq = F, main = "Von Mises distribution", xlab = "Turning angles (radians)")
+
+ta_samples_updated <- Rfast::rvonmises(n = 1e5, m = 0, k = -updated_vm_kappa) - pi
+hist(ta_samples, breaks = 100, freq = F, main = "Von Mises distribution", xlab = "Turning angles (radians)")
+
+vm_ta_df <- data.frame("sample" = 1:length(ta_samples), ta_samples)
+
+ggplot() +
+  geom_density(data = dat_ssf %>% filter(y == 1),
+               aes(x = ta_, fill = as.character(id)),
+               alpha = 0.1, show.legend = F) +
+  geom_density(data = vm_ta_df,
+               aes(x = ta_samples), 
+               colour = "red") +
+  scale_x_continuous(name = "Turning Angle (radians)") +
+  scale_y_continuous(name = "Density") +
+  theme_classic()
 
 # save(m_ndvi, m_ndvip1, m_expndvi, m_quad_ndvi, file = "INLA_models_with_ndvi.RData") # to save multiple objects simultaneously
 # load("INLA_models_with_ndvi.RData")
